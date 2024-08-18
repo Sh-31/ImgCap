@@ -1,3 +1,5 @@
-/data
+# /data
 .kaggle
 __pycache__
+/data/Flickr30/imges
+/data/MS_COCO
