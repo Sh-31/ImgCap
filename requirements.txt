@@ -1,10 +1,12 @@
 datasets
 kaggle
 torch==2.2.0
-torchvision
-opencv-python
-spacy
 torchtext==0.17.0 
 torchvision==0.17
+torcheval
+torchinfo
+opencv-python
+spacy
 pandas
 numpy
+pycocoevalcap
