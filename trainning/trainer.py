@@ -1,3 +1,4 @@
+import os
 import time
 import pickle
 import numpy as np
@@ -13,7 +14,8 @@ from torch.utils.tensorboard import SummaryWriter
 import sys
 sys.path.append('../')
 from data_utils import Flickr30, collate_fn
-from eval_utils import eval_bleu_score, eval_CIDEr
+from utils import load_checkpoint
+from eval_utils import *
 
 
 def train_one_epoch(model, train_loader, criterion, optimizer, scaler, device, epoch, writer):
@@ -62,13 +64,14 @@ def validate_model(model, val_loader, criterion, vocab, decoder, device, writer,
             with autocast(dtype=torch.float16):
                 outputs = model(images, captions)
                 loss = criterion(outputs.view(-1, outputs.size(2)), captions.contiguous().view(-1))
-                val_loss.append(loss.item())
-
+            
                 generated_captions = model.generate_caption(images, vocab, decoder, device)
                 decoded_captions = eval_decode_batch(captions, decoder)
 
                 bleu4_score = eval_bleu_score(candidates=generated_captions, references=decoded_captions)
                 cider_score, _ = eval_CIDEr(candidates=generated_captions, references=decoded_captions)
+                
+                val_loss.append(loss.item())
                 bleu_scores.append(bleu4_score)
                 cider_scores.append(cider_score)
 
@@ -83,10 +86,10 @@ def validate_model(model, val_loader, criterion, vocab, decoder, device, writer,
     return avg_val_loss, avg_bleu, avg_cider, generated_captions, decoded_captions
 
 
-def train_model(model, train_loader, val_loader, criterion, optimizer, scaler, num_epochs, device, vocab, decoder, checkpoint_path, log_dir):
+def train_model(model, train_loader, val_loader, criterion, optimizer, scaler, num_epochs, start_epoch, device, vocab, decoder, checkpoint_path, log_dir):
     writer = SummaryWriter(log_dir=log_dir)
 
-    for epoch in range(num_epochs):
+    for epoch in range(start_epoch, start_epoch + num_epochs):
         start_time = time.time()
 
         train_loss, norm = train_one_epoch(model, train_loader, criterion, optimizer, scaler, device, epoch, writer)
@@ -96,6 +99,8 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, scaler, n
             val_loss, avg_bleu, avg_cider, generated_captions, decoded_captions = validate_model(
                 model, val_loader, criterion, vocab, decoder, device, writer, epoch
             )
+
+            epoch_time = time.time() - start_time   
 
             checkpoint = {
                 'epoch': epoch + 1,
@@ -116,6 +121,7 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, scaler, n
                   f"CIDEr Score: {avg_cider:.4f}, "
                   f"Norm: {norm:.2f}, "
                   f"Epoch Time: {epoch_time:.2f} sec")
+                  
             print("-" * 120)
             print(f"Generated Caption Example: {generated_captions[0]}")
             print(f"Ground Truth Caption Example: {decoded_captions[0]}")
@@ -164,8 +170,8 @@ if __name__ == "__main__":
     val_size = len(dataset) - train_size
     train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
 
-    train_data_loader = DataLoader(train_dataset, batch_size=256, shuffle=True, collate_fn=collate_fn)
-    val_data_loader = DataLoader(val_dataset, batch_size=256, shuffle=True, collate_fn=collate_fn)
+    train_data_loader = DataLoader(train_dataset, batch_size=1024, shuffle=True, collate_fn=collate_fn)
+    val_data_loader = DataLoader(val_dataset, batch_size=1024, shuffle=True, collate_fn=collate_fn)
 
     decoder = dataset.decoder
     vocab = dataset.vocab
@@ -175,16 +181,23 @@ if __name__ == "__main__":
     scaler = GradScaler()
 
     model = ImgCap(cnn_feature_size=1024, lstm_hidden_size=1024, embedding_dim=1024, num_layers=2, vocab_size=len(vocab))
-
     optimizer = optim.AdamW(model.parameters(), lr=3e-4)
+    model = torch.compile(model)
+
+    checkpoint_path = f"{root_path}/trainning/checkpoints/checkpoint_epoch_10.pth"
+    model, optimizer, epoch, train_loss, val_loss, bleu_score, cider_score = load_checkpoint(checkpoint_path=checkpoint_path, model=model, optimizer=optimizer)
+    print(f"Load Model Checkpoint Epoch {epoch}")
+    start_epoch = epoch
+
+    optimizer = optim.AdamW(model.parameters(), lr=4e-4)
     model.to(device)
 
     num_epochs = 250
-
-    checkpoint_path = f"{root_path}/trainning/checkpoints"
+    checkpoint_dir = f"{root_path}/trainning/checkpoints"
     log_dir = f"{root_path}/trainning/logs"
 
     model, optimizer, train_loss, val_loss = train_model(
-        model, train_data_loader, val_data_loader, criterion, optimizer, scaler, num_epochs, device, vocab, decoder,
-        checkpoint_path, log_dir
+        model, train_data_loader, val_data_loader, criterion, optimizer, scaler, num_epochs - start_epoch, start_epoch, device, vocab, decoder,
+        checkpoint_dir, log_dir
     )
+    # tensorboard --logdir '/trainning/logs'

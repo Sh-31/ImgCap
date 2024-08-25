@@ -2,4 +2,7 @@
 .kaggle
 __pycache__
 /data/Flickr30/imges
-/data/MS_COCO
+# /data/MS_COCO
+/imgs
+# Note: model checkpoints have big size
+/trainning/checkpoints/* 

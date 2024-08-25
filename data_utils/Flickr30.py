@@ -6,6 +6,7 @@ import pickle
 import pandas as pd
 from torch.utils.data import Dataset
 from torchtext.vocab import build_vocab_from_iterator
+from torch.nn.utils.rnn import pad_sequence
 
 
 class Flickr30(Dataset):
@@ -92,12 +93,18 @@ class Flickr30(Dataset):
     def __getitem__(self, idx):
         image_id, comment_number, caption = self.labels.iloc[idx]
         image = cv2.imread(f'{self.imges_folder_path}/{image_id}')
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB) # to RGB
 
         if self.transform:
             image = self.transform(image)
-
         # Tokenize and encode the caption
         tensor_caption = self.encoder(caption)
 
         return image, tensor_caption
+
+
+def collate_fn(batch):
+    images, captions = zip(*batch)
+    images = torch.stack(images, 0)
+    captions = pad_sequence(captions, batch_first=True, padding_value=1)
+    return images, captions

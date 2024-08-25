@@ -29,7 +29,7 @@ def upload_data_to_huggingface(image_dir, sampled_df):
 
     return dataset_dict
 
-if _name__ == "__main__":
+if __name__ == "__main__":
     
     sampled_df = pd.read_csv('ImgCap/data/sample_data/Flickr30_Sample.csv')
 

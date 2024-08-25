@@ -74,8 +74,6 @@ def clean_caption(caption, vocab_decoder):
 
     return vocab_decoder(words)
 
-
-
 def eval_decode_batch(captions, vocab_decoder):
     deconed_captions = []
 
