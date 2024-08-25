@@ -1,4 +1,3 @@
-import torch
 from torcheval.metrics.functional.text import bleu_score
 from pycocoevalcap.cider.cider import Cider
 
@@ -16,8 +15,8 @@ def eval_bleu_score(candidates, references, n_gram=4):
     returns:
       bleu score
   '''
-  
-  return bleu_score(input=candidates, target=references, n_gram=n_gram)
+
+  return bleu_score(input=candidates, target=references, n_gram=n_gram).item()
 
 
 def eval_CIDEr(candidates, references, list_to_dict=True, inner_list=False):
@@ -32,14 +31,14 @@ def eval_CIDEr(candidates, references, list_to_dict=True, inner_list=False):
       candidates = ["this is a test", "this is another test"]
       references = [["this is a test"], ["this is another test"]]
 
-      or 
+      or
 
       candidates = {0: "this is a test", 1: "this is another test"}
       references = {0: "this is a test", 1: "this is another test"}
       list_to_dict = False
       inner_list = True
 
-      or 
+      or
 
       candidates = {0: ["this is a test"], 1: ["this is another test"]}
       references = {0: ["this is a test"], 1: ["this is another test"]}
@@ -57,8 +56,32 @@ def eval_CIDEr(candidates, references, list_to_dict=True, inner_list=False):
   if inner_list:
     references = { k:[v] for k,v in references.items() }
     candidates = { k:[v] for k,v in candidates.items() }
-  
+
   matric = Cider()
   avg_score , scores = matric.compute_score(res=references, gts=candidates)
-  
+
   return avg_score, scores
+
+def clean_caption(caption, vocab_decoder):
+    words = []
+    for token in caption:
+        word = vocab_decoder([token])
+        if word == '<eos>':
+            words.append(token)
+            break
+        if word not in ['<pad>']:
+            words.append(token)
+
+    return vocab_decoder(words)
+
+
+
+def eval_decode_batch(captions, vocab_decoder):
+    deconed_captions = []
+
+    for i in range(captions.shape[0]):
+
+        ref_caption = clean_caption(captions[i, :].tolist(), vocab_decoder)
+        deconed_captions.append(ref_caption)
+
+    return deconed_captions

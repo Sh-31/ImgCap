@@ -30,8 +30,8 @@ class Flickr30(Dataset):
         captions = self.labels['comment'].tolist()
         tokenized_captions = [self.tokenize_caption(caption) for caption in captions]
 
-        # 997 (token) + 26 (English alphabet) + space = 1024 tokens
-        vocab = build_vocab_from_iterator(tokenized_captions, specials=["<unk>", "<pad>", "<sos>", "<eos>"], max_tokens=997, min_freq=5)
+        # 4069 (token) + 26 (English alphabet) + space = 4096 tokens
+        vocab = build_vocab_from_iterator(tokenized_captions, specials=["<unk>", "<pad>", "<sos>", "<eos>"], max_tokens=4069, min_freq=5)
         
         # Add individual English alphabet characters and space to the vocabulary
         for ch in string.ascii_lowercase + ' ':
