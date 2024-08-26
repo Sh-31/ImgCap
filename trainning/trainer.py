@@ -3,6 +3,7 @@ import time
 import pickle
 import numpy as np
 import torch
+import random
 import torch.nn as nn
 import torch.optim as optim
 from torch.cuda.amp import autocast, GradScaler
@@ -146,6 +147,15 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, scaler, n
     writer.close()
     return model, optimizer, train_loss, val_loss
 
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
 
 if __name__ == "__main__":
 
@@ -153,6 +163,9 @@ if __name__ == "__main__":
     Flickr30_image_path = f"{root_path}/data/Flickr30/imges"
     Flickr30_labels_path = f"{root_path}/data/Flickr30/results.csv"
     vocab_path = f"{root_path}/vocab.pkl"
+
+    seed = 31  
+    set_seed(seed)
 
     transforms = T.Compose([
         T.ToPILImage(),
@@ -182,14 +195,15 @@ if __name__ == "__main__":
 
     model = ImgCap(cnn_feature_size=1024, lstm_hidden_size=1024, embedding_dim=1024, num_layers=2, vocab_size=len(vocab))
     optimizer = optim.AdamW(model.parameters(), lr=3e-4)
-    model = torch.compile(model)
+   
 
-    checkpoint_path = f"{root_path}/trainning/checkpoints/checkpoint_epoch_10.pth"
+    checkpoint_path = f"{root_path}/trainning/checkpoints/checkpoint_epoch_32.pth"
     model, optimizer, epoch, train_loss, val_loss, bleu_score, cider_score = load_checkpoint(checkpoint_path=checkpoint_path, model=model, optimizer=optimizer)
     print(f"Load Model Checkpoint Epoch {epoch}")
     start_epoch = epoch
 
-    optimizer = optim.AdamW(model.parameters(), lr=4e-4)
+    model = torch.compile(model)
+    optimizer = optim.SGD(model.parameters(), lr=4e-4, weight_decay=1e-5) # I add weight_decay after epoch 32 
     model.to(device)
 
     num_epochs = 250
@@ -197,7 +211,7 @@ if __name__ == "__main__":
     log_dir = f"{root_path}/trainning/logs"
 
     model, optimizer, train_loss, val_loss = train_model(
-        model, train_data_loader, val_data_loader, criterion, optimizer, scaler, num_epochs - start_epoch, start_epoch, device, vocab, decoder,
+        model, train_data_loader, val_data_loader, criterion, optimizer, scaler, num_epochs, start_epoch, device, vocab, decoder,
         checkpoint_dir, log_dir
     )
     # tensorboard --logdir '/trainning/logs'

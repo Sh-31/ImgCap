@@ -1,8 +1,8 @@
 import torch
 
-def load_checkpoint(checkpoint_path, model, optimizer=None):
+def load_checkpoint(checkpoint_path, model, remove_prefix=True ,device='cpu', optimizer=None):
     """
-    Loads a model and optimizer state from a checkpoint file.
+    Loads a model and optimizer state from a checkpoint file, removing '_orig_mod.' prefix if present.
 
     Parameters:
     - checkpoint_path (str): Path to the checkpoint file.
@@ -19,9 +19,17 @@ def load_checkpoint(checkpoint_path, model, optimizer=None):
     - cider_score (float): The CIDEr score saved in the checkpoint (if available).
     """
 
-    checkpoint = torch.load(checkpoint_path)
+    # Load the checkpoint
+    checkpoint = torch.load(checkpoint_path, map_location=torch.device(device))
 
-    model.load_state_dict(checkpoint['model_state_dict'])
+
+    # Modify the state_dict to remove the `_orig_mod.` prefix, if it exists
+    new_state_dict = {}
+    for key, value in checkpoint['model_state_dict'].items():
+        new_key = key.replace('_orig_mod.', '')  # Remove the prefix if present
+        new_state_dict[new_key] = value
+
+    model.load_state_dict(new_state_dict)
 
     if optimizer is not None:
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
