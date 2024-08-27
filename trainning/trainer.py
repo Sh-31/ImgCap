@@ -67,7 +67,7 @@ def validate_model(model, val_loader, criterion, vocab, decoder, device, writer,
                 loss = criterion(outputs.view(-1, outputs.size(2)), captions.contiguous().view(-1))
             
                 generated_captions = model.generate_caption(images, vocab, decoder, device)
-                decoded_captions = eval_decode_batch(captions, decoder)
+                decoded_captions = eval_decode_batch(captions, decoder, vocab)
 
                 bleu4_score = eval_bleu_score(candidates=generated_captions, references=decoded_captions)
                 cider_score, _ = eval_CIDEr(candidates=generated_captions, references=decoded_captions)

@@ -62,24 +62,24 @@ def eval_CIDEr(candidates, references, list_to_dict=True, inner_list=False):
 
   return avg_score, scores
 
-def clean_caption(caption, vocab_decoder):
+def clean_caption(caption, vocab_decoder, vocab):
     words = []
     for token in caption:
-        word = vocab_decoder([token])
+        word = vocab_decoder([token], vocab)
         if word == '<eos>':
             words.append(token)
             break
         if word not in ['<pad>']:
             words.append(token)
 
-    return vocab_decoder(words)
+    return vocab_decoder(words, vocab)
 
-def eval_decode_batch(captions, vocab_decoder):
+def eval_decode_batch(captions, vocab_decoder, vocab):
     deconed_captions = []
 
     for i in range(captions.shape[0]):
 
-        ref_caption = clean_caption(captions[i, :].tolist(), vocab_decoder)
+        ref_caption = clean_caption(captions[i, :].tolist(), vocab_decoder, vocab)
         deconed_captions.append(ref_caption)
 
     return deconed_captions

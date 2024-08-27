@@ -22,7 +22,6 @@ def load_checkpoint(checkpoint_path, model, remove_prefix=True ,device='cpu', op
     # Load the checkpoint
     checkpoint = torch.load(checkpoint_path, map_location=torch.device(device))
 
-
     # Modify the state_dict to remove the `_orig_mod.` prefix, if it exists
     new_state_dict = {}
     for key, value in checkpoint['model_state_dict'].items():
