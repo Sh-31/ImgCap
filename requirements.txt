@@ -10,3 +10,4 @@ spacy
 pandas
 numpy
 pycocoevalcap
+gradio
