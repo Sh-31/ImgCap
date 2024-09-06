@@ -56,10 +56,13 @@ def eval_data_loader(model, data_loader, vocab, beam_width=3, device="cuda"):
             all_candidates.extend(generated_captions)
             all_references.extend(reference_captions)
 
-    avg_bleu = eval_bleu_score(all_candidates, all_references)
+    avg_bleu1 = eval_bleu_score(all_candidates, all_references, n_gram=1)
+    avg_bleu2 = eval_bleu_score(all_candidates, all_references, n_gram=2)
+    avg_bleu3 = eval_bleu_score(all_candidates, all_references, n_gram=3)
+    avg_bleu4 = eval_bleu_score(all_candidates, all_references, n_gram=4)
     avg_cider, _ = eval_CIDEr(all_candidates, all_references)
 
-    return avg_bleu, avg_cider
+    return avg_bleu1, avg_bleu2, avg_bleu3, avg_bleu4, avg_cider
 
 if __name__ == "__main__":
     mp.set_start_method('spawn', force=True)  # Set the multiprocessing start method to 'spawn'
@@ -98,8 +101,25 @@ if __name__ == "__main__":
     model, optimizer, epoch, train_loss, val_loss, bleu_score, cider_score = load_checkpoint(checkpoint_path=checkpoint_path, model=model)
     print(f"Loaded Model Checkpoint Epoch {epoch}")
 
-    beam_width = 3
+    beam_width = 5
 
-    avg_bleu, avg_cider = eval_data_loader(model, val_data_loader, vocab, beam_width=beam_width, device="cuda")
+    avg_bleu1, avg_bleu2, avg_bleu3, avg_bleu4, avg_cider = eval_data_loader(model, val_data_loader, vocab, beam_width=beam_width, device="cuda")
 
-    print(f"Model Evaluation -> avg_bleu: {avg_bleu}, avg_cider: {avg_cider}")
+    print("\n" + "="*60)
+    print(f"Evaluation Metrics at Epoch {epoch}")
+    print("="*60)
+    print(f"BLEU-1 Score: {avg_bleu1:.4f}")
+    print(f"BLEU-2 Score: {avg_bleu2:.4f}")
+    print(f"BLEU-3 Score: {avg_bleu3:.4f}")
+    print(f"BLEU-4 Score: {avg_bleu4:.4f}")
+    print(f"CIDEr Score: {avg_cider:.4f}")
+    print("="*60)
+
+    ####################################################
+    ### Evaluation Metrics at Epoch 40 #################
+    ### BLEU-1 Score: 0.37 #############################
+    ### BLEU-2 Score: 0.22 #############################
+    ### BLEU-3 Score: 0.14 #############################
+    ### BLEU-4 Score: 0.09 #############################
+    ### CIDEr  Score: 0.41 #############################
+
