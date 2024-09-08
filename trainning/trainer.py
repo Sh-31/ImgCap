@@ -6,6 +6,7 @@ import torch
 import random
 import torch.nn as nn
 import torch.optim as optim
+import torch.optim.lr_scheduler as lr_scheduler
 from torch.cuda.amp import autocast, GradScaler
 import torchvision.transforms as T
 from torch.utils.data import random_split, DataLoader
@@ -87,7 +88,7 @@ def validate_model(model, val_loader, criterion, vocab, decoder, device, writer,
     return avg_val_loss, avg_bleu, avg_cider, generated_captions, decoded_captions
 
 
-def train_model(model, train_loader, val_loader, criterion, optimizer, scaler, num_epochs, start_epoch, device, vocab, decoder, checkpoint_path, log_dir):
+def train_model(model, train_loader, val_loader, criterion, optimizer, scheduler, scaler, num_epochs, start_epoch, device, vocab, decoder, checkpoint_path, log_dir):
     writer = SummaryWriter(log_dir=log_dir)
 
     for epoch in range(start_epoch, start_epoch + num_epochs):
@@ -96,13 +97,17 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, scaler, n
         train_loss, norm = train_one_epoch(model, train_loader, criterion, optimizer, scaler, device, epoch, writer)
         epoch_time = time.time() - start_time
 
-        if (epoch + 1) % 10 == 0:
+        if (epoch + 1) % 5 == 0:
             val_loss, avg_bleu, avg_cider, generated_captions, decoded_captions = validate_model(
                 model, val_loader, criterion, vocab, decoder, device, writer, epoch
             )
 
-            epoch_time = time.time() - start_time   
+            epoch_time = time.time() - start_time  
 
+            scheduler.step(val_loss)  # Scheduler step based on validation loss
+            current_lr = scheduler.get_last_lr()[0]
+            writer.add_scalar('Train/Learning_Rate', current_lr, epoch)
+    
             checkpoint = {
                 'epoch': epoch + 1,
                 'model_state_dict': model.state_dict(),
@@ -158,6 +163,9 @@ def set_seed(seed):
 
 
 if __name__ == "__main__":
+    ## for 
+    import torch._dynamo
+    torch._dynamo.config.suppress_errors = True
 
     root_path = '/teamspace/studios/this_studio/ImgCap'
     Flickr30_image_path = f"{root_path}/data/Flickr30/imges"
@@ -168,10 +176,16 @@ if __name__ == "__main__":
     set_seed(seed)
 
     transforms = T.Compose([
-        T.ToPILImage(),
-        T.Resize((224, 224)),
-        T.ToTensor(),
-        T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    T.ToPILImage(),    
+    T.RandomApply([
+        T.RandomHorizontalFlip(),
+        T.RandomRotation(degrees=15),
+        T.RandomCrop(size=(110, 110)),  
+        T.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
+    ], p=0.4),  
+    T.Resize(size=(224, 224)),
+    T.ToTensor(),
+    T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
 
     with open(vocab_path, 'rb') as f:
@@ -183,35 +197,37 @@ if __name__ == "__main__":
     val_size = len(dataset) - train_size
     train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
 
-    train_data_loader = DataLoader(train_dataset, batch_size=1024, shuffle=True, collate_fn=collate_fn)
-    val_data_loader = DataLoader(val_dataset, batch_size=1024, shuffle=True, collate_fn=collate_fn)
+    train_data_loader = DataLoader(train_dataset, batch_size=128, shuffle=True, collate_fn=collate_fn)
+    val_data_loader = DataLoader(val_dataset, batch_size=128, shuffle=True, collate_fn=collate_fn)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     decoder = dataset.decoder
     vocab = dataset.vocab
-
+    
+    # model = ImgCap(cnn_feature_size=1024, lstm_hidden_size=1024, embedding_dim=1024, num_layers=2, vocab_size=len(vocab)) # Non attantion version
+    
+    model = ImgCap(feature_size=2048, lstm_hidden_size=1024, embedding_dim=1024, num_layers=2, vocab_size=len(vocab)).to(device) # attantion version
+    
     criterion = nn.CrossEntropyLoss(ignore_index=vocab['<pad>'])
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    optimizer = optim.AdamW(model.parameters(), lr=2e-4,  weight_decay=1e-4)
+    scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
     scaler = GradScaler()
 
-    model = ImgCap(cnn_feature_size=1024, lstm_hidden_size=1024, embedding_dim=1024, num_layers=2, vocab_size=len(vocab))
-    optimizer = optim.AdamW(model.parameters(), lr=3e-4)
-   
-
-    checkpoint_path = f"{root_path}/trainning/checkpoints/checkpoint_epoch_32.pth"
-    model, optimizer, epoch, train_loss, val_loss, bleu_score, cider_score = load_checkpoint(checkpoint_path=checkpoint_path, model=model, optimizer=optimizer)
+    #### Load checkpoint ####
+    checkpoint_path = f"{root_path}/trainning/checkpoints/attention/checkpoint_epoch_30.pth"
+    model, optimizer, epoch, train_loss, val_loss, bleu_score, cider_score = load_checkpoint(checkpoint_path=checkpoint_path, model=model, optimizer=optimizer, device=device)
     print(f"Load Model Checkpoint Epoch {epoch}")
     start_epoch = epoch
 
     model = torch.compile(model)
-    optimizer = optim.SGD(model.parameters(), lr=4e-4, weight_decay=1e-5) # I add weight_decay after epoch 32 
     model.to(device)
 
     num_epochs = 250
-    checkpoint_dir = f"{root_path}/trainning/checkpoints"
-    log_dir = f"{root_path}/trainning/logs"
+    checkpoint_dir = f"{root_path}/trainning/checkpoints/attention"
+    log_dir = f"{root_path}/trainning/logs/attention"
 
     model, optimizer, train_loss, val_loss = train_model(
-        model, train_data_loader, val_data_loader, criterion, optimizer, scaler, num_epochs, start_epoch, device, vocab, decoder,
+        model, train_data_loader, val_data_loader, criterion, optimizer, scheduler, scaler, num_epochs, start_epoch, device, vocab, decoder,
         checkpoint_dir, log_dir
     )
-    # tensorboard --logdir '/trainning/logs'
+    # tensorboard --logdir '/trainning/logs/attention'

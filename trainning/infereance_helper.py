@@ -20,11 +20,58 @@ def decoder(indices, vocab):
 
     return "".join(words)
 
-def beam_search_caption(model, images, vocab, decoder, device="cpu",
+def generate_caption(model, images, vocab, decoder, device="cpu", start_token="<sos>", end_token="<eos>", max_seq_length=100):
+        model.eval()
+
+        with torch.no_grad():
+            start_index = vocab[start_token]
+            end_index = vocab[end_token]
+            images = images.to(device)
+            batch_size = images.size(0)
+
+            captions = [[start_index,] for _ in range(batch_size)] 
+            end_token_appear = [False] * batch_size
+
+            cnn_features = model.cnn(images)  # (B, 49, 2048)
+
+            h, c = model.lstm.init_hidden_state(batch_size)
+       
+            word_input = torch.full((batch_size,), start_index, dtype=torch.long).to(device)
+
+            for t in range(max_seq_length):
+                embeddings = model.lstm.embedding(word_input) 
+                context, _ = model.lstm.attention(cnn_features, h[-1])  
+                lstm_input_step = torch.cat([embeddings, context], dim=1).unsqueeze(1)
+
+                out, (h, c) = model.lstm.lstm(lstm_input_step, (h, c))  
+              
+                output = model.lstm.fc(out.squeeze(1))  # (B, vocab_size)
+                
+                predicted_word_indices = torch.argmax(output, dim=1)  # (B,)
+                word_input = predicted_word_indices
+                
+                for i in range(batch_size):
+                    if not end_token_appear[i]:
+                        predicted_word = vocab.lookup_token(predicted_word_indices[i].item())
+                        if predicted_word == end_token:
+                            captions[i].append(predicted_word_indices[i].item())
+                            end_token_appear[i] = True
+                        else:
+                             captions[i].append(predicted_word_indices[i].item())
+        
+                    if all(end_token_appear):
+                        break
+
+            captions = [decoder(caption, vocab) for caption in captions]
+
+        return captions
+
+
+def beam_search_caption_without_attation(model, images, vocab, decoder, device="cpu",
                        start_token="<sos>", end_token="<eos>",
                        beam_width=3, max_seq_length=100):
     """
-    Generates captions for images using beam search.
+    Generates captions for imgcap (without attation version) using beam search.
 
     Args:
         model (ImgCap): The image captioning model.
@@ -133,10 +180,11 @@ def beam_search_caption(model, images, vocab, decoder, device="cpu",
 
     return best_caption
 
+def generate_caption_without_attation(model, images, vocab, decoder, device="cpu", start_token="<sos>", end_token="<eos>", max_seq_length=100, top_k=2):
+    """ Generates captions for imgcap (without attation version) in gredy search manner."""
 
-def generate_caption(model, images, vocab, decoder, device="cpu", start_token="<sos>", end_token="<eos>", max_seq_length=100, top_k=2):
     model.eval()
-
+    
     with torch.no_grad():
         start_index = vocab[start_token]
         end_index = vocab[end_token]

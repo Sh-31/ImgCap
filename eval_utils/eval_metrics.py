@@ -65,14 +65,14 @@ def eval_CIDEr(candidates, references, list_to_dict=True, inner_list=False):
 def clean_caption(caption, vocab_decoder, vocab):
     words = []
     for token in caption:
-        word = vocab_decoder([token], vocab)
+        word = vocab_decoder([token])
         if word == '<eos>':
             words.append(token)
             break
         if word not in ['<pad>']:
             words.append(token)
 
-    return vocab_decoder(words, vocab)
+    return vocab_decoder(words)
 
 def eval_decode_batch(captions, vocab_decoder, vocab):
     deconed_captions = []
