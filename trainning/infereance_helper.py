@@ -62,10 +62,90 @@ def generate_caption(model, images, vocab, decoder, device="cpu", start_token="<
                     if all(end_token_appear):
                         break
 
-            captions = [decoder(caption, vocab) for caption in captions]
+            captions = [decoder(caption) for caption in captions]
 
         return captions
 
+def beam_search_caption(model, images, vocab, decoder, device="cpu",
+                       start_token="<sos>", end_token="<eos>",
+                       beam_width=3, max_seq_length=100):
+        model.eval()
+
+        with torch.no_grad():
+            start_index = vocab[start_token]
+            end_index = vocab[end_token]
+            images = images.to(device)
+            batch_size = images.size(0)
+
+            # Ensure batch_size is 1 for beam search (one image at a time)
+            if batch_size != 1:
+                raise ValueError("Beam search currently supports batch_size=1.")
+
+            cnn_features = model.cnn(images)  # (B, 49, 2048)
+            h, c = model.lstm.init_hidden_state(batch_size)
+            word_input = torch.full((batch_size,), start_index, dtype=torch.long).to(device)
+
+            embeddings = model.lstm.embedding(word_input) 
+            context, _ = model.lstm.attention(cnn_features, h[-1])
+            lstm_input = torch.cat([embeddings, context], dim=1).unsqueeze(1)  
+
+
+            sequences = [([start_index], 0.0, lstm_input, (h, c))]  # List of tuples: (sequence, score, input, state)
+
+            completed_sequences = []
+
+            for _ in range(max_seq_length):
+                all_candidates = []
+
+                for seq, score, lstm_input, (h,c) in sequences:
+                    if seq[-1] == end_index:
+                        completed_sequences.append((seq, score))
+                        continue
+
+                    lstm_out, (h_new, c_new) = model.lstm.lstm(lstm_input, (h, c))  # lstm_out: (1, 1, 1024)
+
+                    output = model.lstm.fc(lstm_out.squeeze(1))  # Shape: (1, vocab_size)
+
+                    log_probs = F.log_softmax(output, dim=1)  # Shape: (1, vocab_size)
+
+                    top_log_probs, top_indices = log_probs.topk(beam_width, dim=1)  # Each of shape: (1, beam_width)
+
+                    for i in range(beam_width):
+                        token = top_indices[0, i].item()
+                        token_log_prob = top_log_probs[0, i].item()
+
+                        new_seq = seq + [token]
+                        new_score = score + token_log_prob
+
+                        token_tensor = torch.tensor([token], device=device)
+                        embeddings = model.lstm.embedding(token_tensor) 
+                        context, _ = model.lstm.attention(cnn_features, h_new[-1])
+                        new_lstm_input = torch.cat([embeddings, context], dim=1).unsqueeze(1)  
+
+                        if h_new is not None and c_new is not None:
+                            h_new, c_new = (h_new.clone(), c_new.clone())
+                        else:
+                            h_new, c_new = None, None
+
+                        all_candidates.append((new_seq, new_score, new_lstm_input, (h_new, c_new) ))
+
+                if not all_candidates:
+                    break
+
+                ordered = sorted(all_candidates, key=lambda tup: tup[1], reverse=True)
+
+                sequences = ordered[:beam_width]
+
+                if len(completed_sequences) >= beam_width:
+                    break
+
+            if len(completed_sequences) == 0:
+                completed_sequences = sequences
+            
+            best_seq = max(completed_sequences, key=lambda x: x[1])
+            best_caption = decoder(best_seq[0])
+
+        return best_caption
 
 def beam_search_caption_without_attation(model, images, vocab, decoder, device="cpu",
                        start_token="<sos>", end_token="<eos>",
@@ -176,7 +256,7 @@ def beam_search_caption_without_attation(model, images, vocab, decoder, device="
         if best_seq[0] == start_index:
             best_seq = best_seq[1:]
 
-        best_caption = decoder(best_seq, vocab)
+        best_caption = decoder(best_seq)
 
     return best_caption
 
@@ -221,6 +301,6 @@ def generate_caption_without_attation(model, images, vocab, decoder, device="cpu
 
                 captions[j].append(predicted_word_indices[j].item())
 
-        captions = [decoder(caption, vocab) for caption in captions]
+        captions = [decoder(caption) for caption in captions]
 
     return captions

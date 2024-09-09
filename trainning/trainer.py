@@ -182,7 +182,7 @@ if __name__ == "__main__":
         T.RandomRotation(degrees=15),
         T.RandomCrop(size=(110, 110)),  
         T.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
-    ], p=0.4),  
+    ], p=0.8),  
     T.Resize(size=(224, 224)),
     T.ToTensor(),
     T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
@@ -209,15 +209,17 @@ if __name__ == "__main__":
     model = ImgCap(feature_size=2048, lstm_hidden_size=1024, embedding_dim=1024, num_layers=2, vocab_size=len(vocab)).to(device) # attantion version
     
     criterion = nn.CrossEntropyLoss(ignore_index=vocab['<pad>'])
-    optimizer = optim.AdamW(model.parameters(), lr=2e-4,  weight_decay=1e-4)
+    optimizer = optim.AdamW(model.parameters(), lr=4e-4,  weight_decay=1e-4)
     scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
     scaler = GradScaler()
 
     #### Load checkpoint ####
-    checkpoint_path = f"{root_path}/trainning/checkpoints/attention/checkpoint_epoch_30.pth"
+    checkpoint_path = f"{root_path}/trainning/checkpoints/attention/checkpoint_epoch_44.pth"
     model, optimizer, epoch, train_loss, val_loss, bleu_score, cider_score = load_checkpoint(checkpoint_path=checkpoint_path, model=model, optimizer=optimizer, device=device)
     print(f"Load Model Checkpoint Epoch {epoch}")
     start_epoch = epoch
+
+    optimizer = optim.SGD(model.parameters(), lr=1e-4,  weight_decay=1e-4)
 
     model = torch.compile(model)
     model.to(device)

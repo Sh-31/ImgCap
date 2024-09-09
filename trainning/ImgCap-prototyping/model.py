@@ -121,6 +121,118 @@ class ImgCap(nn.Module):
 
         return captions
 
+    def beam_search_caption(self, images, vocab, decoder, device="cpu",
+                       start_token="<sos>", end_token="<eos>",
+                       beam_width=3, max_seq_length=100):
+        """
+        Generates captions for imgcap (without attation version) using beam search.
+
+        Args:
+            images (torch.Tensor): Batch of images.
+            vocab (Vocab): Vocabulary object.
+            decoder (function): Function to decode indices to words.
+            device (str): Device to perform computation on.
+            start_token (str): Start-of-sequence token.
+            end_token (str): End-of-sequence token.
+            beam_width (int): Number of beams to keep.
+            max_seq_length (int): Maximum length of the generated caption.
+
+        Returns:
+            list: Generated captions for each image in the batch.
+        """
+    self.eval()
+
+    with torch.no_grad():
+        start_index = vocab[start_token]
+        end_index = vocab[end_token]
+        images = images.to(device)
+        batch_size = images.size(0)
+        
+        # Ensure batch_size is 1 for beam search (one image at a time)
+        if batch_size != 1:
+            raise ValueError("Beam search currently supports batch_size=1.")
+
+        cnn_feature = self.cnn(images)  # Shape: (1, 1024)
+        lstm_input = self.lstm.projection(cnn_feature).unsqueeze(1)  # Shape: (1, 1, 1024)
+        state = None  # Initial LSTM state
+
+        # Initialize the beam with the start token
+        sequences = [([start_index], 0.0, lstm_input, state)]  # List of tuples: (sequence, score, input, state)
+
+        completed_sequences = []
+
+        for _ in range(max_seq_length):
+            all_candidates = []
+
+            # Iterate over all current sequences in the beam
+            for seq, score, lstm_input, state in sequences:
+                # If the last token is the end token, add the sequence to completed_sequences
+                if seq[-1] == end_index:
+                    completed_sequences.append((seq, score))
+                    continue
+
+                # Pass the current input and state through the LSTM
+                lstm_out, state_new = self.lstm.lstm(lstm_input, state)  # lstm_out: (1, 1, 1024)
+
+                # Pass the LSTM output through the fully connected layer to get logits
+                output = self.lstm.fc(lstm_out.squeeze(1))  # Shape: (1, vocab_size)
+
+                # Compute log probabilities
+                log_probs = F.log_softmax(output, dim=1)  # Shape: (1, vocab_size)
+
+                # Get the top beam_width tokens and their log probabilities
+                top_log_probs, top_indices = log_probs.topk(beam_width, dim=1)  # Each of shape: (1, beam_width)
+
+                # Iterate over the top tokens to create new candidate sequences
+                for i in range(beam_width):
+                    token = top_indices[0, i].item()
+                    token_log_prob = top_log_probs[0, i].item()
+
+                    # Create a new sequence by appending the current token
+                    new_seq = seq + [token]
+                    new_score = score + token_log_prob
+
+                    # Get the embedding of the new token
+                    token_tensor = torch.tensor([token], device=device)
+                    new_lstm_input = self.lstm.embedding(token_tensor).unsqueeze(1)  # Shape: (1, 1, 1024)
+
+                    # Clone the new state to ensure each beam has its own state
+                    if state_new is not None:
+                        new_state = (state_new[0].clone(), state_new[1].clone())
+                    else:
+                        new_state = None
+
+                    # Add the new candidate to all_candidates
+                    all_candidates.append((new_seq, new_score, new_lstm_input, new_state))
+
+            # If no candidates are left to process, break out of the loop
+            if not all_candidates:
+                break
+
+            # Sort all candidates by score in descending order
+            ordered = sorted(all_candidates, key=lambda tup: tup[1], reverse=True)
+
+            # Select the top beam_width sequences to form the new beam
+            sequences = ordered[:beam_width]
+
+            # If enough completed sequences are found, stop early
+            if len(completed_sequences) >= beam_width:
+                break
+
+        # If no sequences have completed, use the current sequences
+        if len(completed_sequences) == 0:
+            completed_sequences = sequences
+
+        # Select the sequence with the highest score
+        best_seq, best_score = max(completed_sequences, key=lambda x: x[1])
+
+        if best_seq[0] == start_index:
+            best_seq = best_seq[1:]
+
+        best_caption = decoder(best_seq)
+
+    return best_caption    
+
 
 ### Other Implementations FOR LSTM ###
 

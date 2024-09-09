@@ -12,7 +12,7 @@ import torch.multiprocessing as mp
 import sys
 sys.path.append('../')
 from data_utils import Flickr30, collate_fn
-from trainning import ImgCap, generate_caption, decoder, beam_search_caption
+from trainning import ImgCap, generate_caption, beam_search_caption
 from utils import load_checkpoint
 from eval_utils import *
 
@@ -35,7 +35,7 @@ def generate_captions_for_batch(model, images, vocab, decoder, beam_width, devic
         all_generated_captions.append(generated_caption)
     return all_generated_captions
 
-def eval_data_loader(model, data_loader, vocab, beam_width=3, device="cuda"):
+def eval_data_loader(model, data_loader, vocab, decoder, beam_width=3, device="cuda"):
     model.to(device)
     model.eval()
 
@@ -87,23 +87,26 @@ if __name__ == "__main__":
 
     dataset = Flickr30(Flickr30_image_path, Flickr30_labels_path, vocab=vocab, transform=transforms)
 
+    decoder = dataset.decoder
+    vocab = dataset.vocab
+
     train_size = int(0.90 * len(dataset))
     val_size = len(dataset) - train_size
     train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
 
     # train_data_loader = DataLoader(train_dataset, batch_size=2048, shuffle=True, collate_fn=collate_fn)
-    val_data_loader = DataLoader(val_dataset, batch_size=2048, shuffle=True, collate_fn=collate_fn)
+    val_data_loader = DataLoader(val_dataset, batch_size=2048, shuffle=True, collate_fn=collate_fn) # 4096
 
-    model = ImgCap(cnn_feature_size=1024, lstm_hidden_size=1024, embedding_dim=1024, num_layers=2, vocab_size=len(vocab))
-
-    checkpoint_path = f"{root_path}/trainning/checkpoints/checkpoint_epoch_40.pth"
+    model = ImgCap(feature_size=2048, lstm_hidden_size=1024, embedding_dim=1024, num_layers=2, vocab_size=len(vocab)) # attantion version
+    
+    checkpoint_path = f"{root_path}/trainning/checkpoints/attention/checkpoint_epoch_32.pth"
 
     model, optimizer, epoch, train_loss, val_loss, bleu_score, cider_score = load_checkpoint(checkpoint_path=checkpoint_path, model=model)
     print(f"Loaded Model Checkpoint Epoch {epoch}")
 
     beam_width = 5
 
-    avg_bleu1, avg_bleu2, avg_bleu3, avg_bleu4, avg_cider = eval_data_loader(model, val_data_loader, vocab, beam_width=beam_width, device="cuda")
+    avg_bleu1, avg_bleu2, avg_bleu3, avg_bleu4, avg_cider = eval_data_loader(model, val_data_loader, vocab, decoder=decoder, beam_width=beam_width, device="cuda")
 
     print("\n" + "="*60)
     print(f"Evaluation Metrics at Epoch {epoch}")
@@ -115,6 +118,7 @@ if __name__ == "__main__":
     print(f"CIDEr Score: {avg_cider:.4f}")
     print("="*60)
 
+    # Imgcap with out attention - Beam wigth 5
     ####################################################
     ### Evaluation Metrics at Epoch 40 #################
     ### BLEU-1 Score: 0.37 #############################
@@ -122,4 +126,14 @@ if __name__ == "__main__":
     ### BLEU-3 Score: 0.14 #############################
     ### BLEU-4 Score: 0.09 #############################
     ### CIDEr  Score: 0.41 #############################
-
+    
+    # Imgcap with attention - Beam wigth 5
+    #============================================================
+    # Evaluation Metrics at Epoch 30
+    # ============================================================
+    # BLEU-1 Score: 0.3959
+    # BLEU-2 Score: 0.2464
+    # BLEU-3 Score: 0.1619
+    # BLEU-4 Score: 0.1077
+    # CIDEr Score: 0.6213
+    # ============================================================
