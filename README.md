@@ -21,8 +21,8 @@
    ```
 
 3. **Download the model checkpoint (manual step):**
-   - **ImgCap (CNN + LSTM)**: [Download checkpoint](https://huggingface.co/spaces/shredder-31/ImgCap/blob/main/checkpoint_epoch_40.pth)
-   - **ImgCap (CNN + LSTM + Attention)**: (Add link here)
+   - **ImgCap (CNN + LSTM)**: [Download checkpoint](https://huggingface.co/spaces/shredder-31/ImgCap/resolve/main/checkpoint_epoch_40.pth)
+   - **ImgCap (CNN + LSTM + Attention)**: [Download checkpoint](https://huggingface.co/spaces/shredder-31/ImgCap/resolve/main/checkpoint_epoch_30.pth)
    - Place the model checkpoint in the appropriate directory:  
      - For CNN + LSTM + Attention: `ImgCap/trainning/checkpoints/attention`  
      - For CNN + LSTM: `ImgCap/trainning/checkpoints`
@@ -71,7 +71,7 @@ The model architectures compared in this report consist of two versions of the *
 3. **LSTM Decoder and Embedding:**
    - Both models use an LSTM-based decoder with trainable embedding layers. The LSTM decoder with attention concatenates the context vectors obtained from the attention mechanism, while the non-attention model directly processes image features via projection layers.
    - The embedding dimension, hidden size, and number of layers in the LSTM remain consistent across both models.
-   - Both models use same Vocab size 4096
+     
 4. **Vocabulary Construction**:
    - **Captions Tokenization**: Captions are tokenized using spaCy, which splits captions into tokens. These tokens are then used to build the vocabulary (vocab size 4096).
    - **Vocabulary Content**: The vocabulary includes special tokens (`<unk>`, `<pad>`, `<sos>`, `<eos>`) and tokens derived from the captions. Individual English alphabet characters and spaces are also added to the vocabulary to handle out-of-vocabulary words or character-level tokenization.
