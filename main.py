@@ -4,7 +4,7 @@ import torch
 import gradio as gr
 import torchvision.transforms as T
 from utils import load_checkpoint
-from trainning import ImgCap, beam_search_caption, decoder
+from trainning import ImgCap, beam_search_caption, beam_search_caption_without_attation , decoder
 
 def initialize(root_path):
     with open(f"{root_path}vocab.pkl", 'rb') as f:
@@ -16,9 +16,15 @@ def initialize(root_path):
         T.ToTensor(),
         T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ]) 
+
+    # For attention version
+    checkpoint_path = f"{root_path}trainning/checkpoints/attention/checkpoint_epoch_30.pth" 
+    model = ImgCap(feature_size=2048, lstm_hidden_size=1024, embedding_dim=1024, num_layers=2, vocab_size=len(vocab)) # attantion version
     
-    checkpoint_path = f"{root_path}trainning/checkpoints/checkpoint_epoch_35.pth"
-    model = ImgCap(cnn_feature_size=1024, lstm_hidden_size=1024, embedding_dim=1024, num_layers=2, vocab_size=len(vocab))
+    # for non attention version
+    # checkpoint_path = f"{root_path}trainning/checkpoints/checkpoint_epoch_40.pth" 
+    # model = ImgCap(cnn_feature_size=1024, lstm_hidden_size=1024, embedding_dim=1024, num_layers=2, vocab_size=len(vocab)) # for non attention version
+
     model, _, _, _, _, _, _ = load_checkpoint(checkpoint_path=checkpoint_path, model=model)
 
     return model, vocab, transforms
@@ -33,6 +39,11 @@ def ImgCap_inference(img, beam_width, model, vocab, transforms):
 
 if __name__ == "__main__":
     footer_html = "<p style='text-align: center; font-size: 16px;'>Developed by Sherif Ahmed</p>"
+
+    # Notes: 
+    # 1. You may need to replace root_path
+    # 2. To use ImgCap with out attention you need to switch files trainning/ImgCap-prototyping/model.py and /trainning/model.py
+
     root_path = "/teamspace/studios/this_studio/ImgCap/"
 
     img1_path = f"{root_path}docs/examples/1 (1).jpeg"
@@ -57,4 +68,4 @@ if __name__ == "__main__":
         examples=examples
     )
 
-    interface.launch(debug=True)
+    interface.launch(debug=True, share=True)

@@ -1,8 +1,13 @@
+import pickle
 import torch
 import string
 import torch.nn.functional as F
 
-def decoder(indices, vocab):
+def decoder(indices):
+
+    with open(f"/teamspace/studios/this_studio/ImgCap/vocab.pkl", 'rb') as f:
+        vocab = pickle.load(f)
+
     tokens = [vocab.lookup_token(idx) for idx in indices]
     words = []
     current_word = []
